@@ -7,27 +7,33 @@ echo "===================================="
 echo ""
 
 # Check if Docker is installed
-if ! command -v docker &> /dev/null; then
+if ! command -v docker &> /dev/null && ! [ -x /usr/bin/docker ]; then
     echo "❌ Docker is not installed. Please install Docker first."
     echo "Visit: https://docs.docker.com/get-docker/"
     exit 1
 fi
 
-# Check if Docker Compose is installed
-if ! command -v docker-compose &> /dev/null; then
+# Check if Docker Compose is installed (try both docker-compose and docker compose)
+DOCKER_COMPOSE_CMD=""
+if command -v docker-compose &> /dev/null; then
+    DOCKER_COMPOSE_CMD="docker-compose"
+elif docker compose version &> /dev/null; then
+    DOCKER_COMPOSE_CMD="docker compose"
+else
     echo "❌ Docker Compose is not installed. Please install Docker Compose first."
     echo "Visit: https://docs.docker.com/compose/install/"
     exit 1
 fi
 
 echo "✅ Docker and Docker Compose are installed"
+echo "   Using: $DOCKER_COMPOSE_CMD"
 echo ""
 
 # Check if .env file exists and ask if user wants to reconfigure
 if [ -f .env ]; then
     echo "⚠️  An .env file already exists."
     read -p "Do you want to reconfigure? (y/N): " reconfigure
-    if [[ ! $reconfigure =~ ^[Yy]$ ]]; then
+    if ! echo "$reconfigure" | grep -qE '^[Yy]$'; then
         echo ""
         echo "Using existing configuration..."
         
@@ -43,7 +49,7 @@ if [ -f .env ]; then
         # Start the application
         echo ""
         echo "🔨 Building and starting containers..."
-        docker-compose up -d --build
+        $DOCKER_COMPOSE_CMD up -d --build
         
         # Wait for services
         echo ""
@@ -53,7 +59,7 @@ if [ -f .env ]; then
         # Check status
         echo ""
         echo "📊 Service Status:"
-        docker-compose ps
+        $DOCKER_COMPOSE_CMD ps
         
         echo ""
         echo "✅ Personal Ledger is running!"
@@ -78,18 +84,25 @@ while true; do
     read -p "Enter the port to run the application (default: 3000): " APP_PORT
     APP_PORT=${APP_PORT:-3000}
     
-    # Validate port number
-    if [[ "$APP_PORT" =~ ^[0-9]+$ ]] && [ "$APP_PORT" -ge 1 ] && [ "$APP_PORT" -le 65535 ]; then
-        # Check if port is already in use
-        if lsof -Pi :$APP_PORT -sTCP:LISTEN -t >/dev/null 2>&1 || netstat -an 2>/dev/null | grep -q ":$APP_PORT.*LISTEN"; then
-            echo "⚠️  Port $APP_PORT is already in use. Please choose a different port."
-        else
-            echo "✅ Port $APP_PORT is available"
-            break
-        fi
-    else
-        echo "❌ Invalid port number. Please enter a number between 1 and 65535."
-    fi
+    # Validate port number (POSIX-compliant)
+    case "$APP_PORT" in
+        ''|*[!0-9]*)
+            echo "❌ Invalid port number. Please enter a number between 1 and 65535."
+            ;;
+        *)
+            if [ "$APP_PORT" -ge 1 ] && [ "$APP_PORT" -le 65535 ]; then
+                # Check if port is already in use
+                if lsof -Pi :$APP_PORT -sTCP:LISTEN -t >/dev/null 2>&1 || netstat -an 2>/dev/null | grep -q ":$APP_PORT.*LISTEN"; then
+                    echo "⚠️  Port $APP_PORT is already in use. Please choose a different port."
+                else
+                    echo "✅ Port $APP_PORT is available"
+                    break
+                fi
+            else
+                echo "❌ Invalid port number. Please enter a number between 1 and 65535."
+            fi
+            ;;
+    esac
 done
 
 echo ""
@@ -162,7 +175,7 @@ read -p "Press Enter to start the application..."
 # Start the application
 echo ""
 echo "🔨 Building and starting containers..."
-docker-compose up -d --build
+$DOCKER_COMPOSE_CMD up -d --build
 
 # Wait for services to be healthy
 echo ""
@@ -172,7 +185,7 @@ sleep 5
 # Check status
 echo ""
 echo "📊 Service Status:"
-docker-compose ps
+$DOCKER_COMPOSE_CMD ps
 
 echo ""
 echo "✅ Personal Ledger is running!"
@@ -180,9 +193,9 @@ echo ""
 echo "📱 Access the application at: http://localhost:$APP_PORT"
 echo ""
 echo "📝 Useful commands:"
-echo "   View logs:    docker-compose logs -f"
-echo "   Stop app:     docker-compose down"
-echo "   Restart:      docker-compose restart"
+echo "   View logs:    $DOCKER_COMPOSE_CMD logs -f"
+echo "   Stop app:     $DOCKER_COMPOSE_CMD down"
+echo "   Restart:      $DOCKER_COMPOSE_CMD restart"
 echo ""
 echo "💾 Your configuration is saved in .env"
 echo "   Keep this file safe, especially the encryption key!"
