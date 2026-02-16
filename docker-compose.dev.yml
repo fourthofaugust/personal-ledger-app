@@ -1,0 +1,26 @@
+version: '3.8'
+
+services:
+  mongodb:
+    image: mongo:7
+    container_name: personal-ledger-mongodb-dev
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongodb-dev-data:/data/db
+      - mongodb-dev-config:/data/configdb
+    environment:
+      - MONGO_INITDB_DATABASE=ledger
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+volumes:
+  mongodb-dev-data:
+    driver: local
+  mongodb-dev-config:
+    driver: local
